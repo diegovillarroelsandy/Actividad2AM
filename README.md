@@ -15,11 +15,13 @@ Clonar el repositorio:
 ```bash
 git clone https://github.com/TU_USUARIO/TU_REPOSITORIO.git
 cd TU_REPOSITORIO
+```
+Instalar dependencias
 
-## Instalar dependencias
 ```bash
 npm install
-
-## Ejecutar la aplicacion
+```
+Ejecutar la aplicacion
 ```bash
 ionic serve
+

@@ -12,27 +12,13 @@ import {
   IonSegment,
   IonSegmentButton,
 } from "@ionic/react";
-import { useEffect, useState } from "react";
+import { JSX, useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { Book } from "../types/book";
-
+import React from "react";
 const stopwords = [
-  "el",
-  "la",
-  "los",
-  "las",
-  "de",
-  "del",
-  "un",
-  "una",
-  "y",
-  "a",
-  "en",
-  "por",
-  "para",
-  "con",
-  "al",
+  "el","la","los","las","de","del","un","una","y","a","en","por","para","con","al"
 ];
 
 function normalizeTitle(s: string) {
@@ -47,7 +33,6 @@ function normalizeTitle(s: string) {
 
 function extractKeywordsFromBook(book: Book): string[] {
   const keys: string[] = [];
-
   if (book.title) {
     const words = book.title
       .split(/\s+/)
@@ -55,38 +40,35 @@ function extractKeywordsFromBook(book: Book): string[] {
       .filter((w) => w.length > 2 && !stopwords.includes(w));
     keys.push(...words.slice(0, 3));
   }
-
   if (book.author && book.author.length > 0) {
     const authorParts = book.author[0].split(/\s+/).slice(0, 2);
     keys.push(authorParts.join(" "));
   }
-
   return keys;
 }
 
-const Recommendations: React.FC = () => {
+// 🔹 Props tipadas
+interface RecommendationsProps {
+  userId?: string;
+}
+
+const Recommendations: React.FC<RecommendationsProps> = ({ userId }) => {
   const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // 🔹 Estado para filtros
-  const [filterType, setFilterType] = useState<"genre" | "author" | "date">(
-    "genre"
-  );
+  const [filterType, setFilterType] = useState<"genre" | "author" | "date">("genre");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
-        const userId = localStorage.getItem("userId");
-        if (!userId) {
+        const id = userId || localStorage.getItem("userId");
+        if (!id) {
           console.warn("No hay usuario logueado");
           setLoading(false);
           return;
         }
 
-        const snapshot = await getDocs(
-          collection(db, "users", userId, "favorites")
-        );
+        const snapshot = await getDocs(collection(db, "users", id, "favorites"));
         const favorites = snapshot.docs.map((d) => d.data() as Book);
 
         if (favorites.length === 0) {
@@ -96,53 +78,34 @@ const Recommendations: React.FC = () => {
         }
 
         const favoriteIds = new Set<string>(
-          favorites.map((f) => f.id).filter((x): x is string => !!x)
-        );
-        const favoriteTitleSet = new Set<string>(
-          favorites.map((f) => normalizeTitle(f.title))
-        );
+  favorites.map(f => f.id).filter((x): x is string => !!x)
+);
+        const favoriteTitleSet = new Set<string>(favorites.map(f => normalizeTitle(f.title)));
 
         const allKeywords = new Set<string>();
-        favorites.forEach((f) => {
-          extractKeywordsFromBook(f).forEach((k) => allKeywords.add(k));
-        });
+        favorites.forEach(f => extractKeywordsFromBook(f).forEach(k => allKeywords.add(k)));
         const keywordsList = Array.from(allKeywords).slice(0, 5);
 
         const byId = new Map<string, Book>();
         for (const kw of keywordsList) {
           if (!kw) continue;
-          const res = await fetch(
-            `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-              kw
-            )}&maxResults=10`
-          );
+          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(kw)}&maxResults=10`);
           const data = await res.json();
           if (!data?.items) continue;
 
           for (const item of data.items) {
             const id: string = item.id;
             const title: string = item.volumeInfo?.title ?? "Sin título";
-            const authors: string[] = item.volumeInfo?.authors ?? [
-              "Desconocido",
-            ];
+            const authors: string[] = item.volumeInfo?.authors ?? ["Desconocido"];
             const cover: string = item.volumeInfo?.imageLinks?.thumbnail ?? "";
             const categories: string[] = item.volumeInfo?.categories ?? [];
-            const publishedDate: string =
-              item.volumeInfo?.publishedDate ?? "0000";
+            const publishedDate: string = item.volumeInfo?.publishedDate ?? "0000";
 
             const normTitle = normalizeTitle(title);
-            if (favoriteIds.has(id) || favoriteTitleSet.has(normTitle))
-              continue;
+            if (favoriteIds.has(id) || favoriteTitleSet.has(normTitle)) continue;
 
             if (!byId.has(id)) {
-              byId.set(id, {
-                id,
-                title,
-                author: authors,
-                cover,
-                categories,
-                publishedDate,
-              });
+              byId.set(id, { id, title, author: authors, cover, categories, publishedDate });
             }
           }
         }
@@ -157,19 +120,17 @@ const Recommendations: React.FC = () => {
     };
 
     fetchRecommendations();
-  }, []);
+  }, [userId]);
 
-  // 🔹 Agrupación dinámica según filtro
+  // 🔹 Contenido filtrado dinámico
   let content: JSX.Element | null = null;
 
   if (filterType === "genre") {
     const groupedByGenre: Record<string, Book[]> = {};
-    recommendedBooks.forEach((book) => {
-      if (book.categories && book.categories.length > 0) {
-        const genre = book.categories[0];
-        if (!groupedByGenre[genre]) groupedByGenre[genre] = [];
-        groupedByGenre[genre].push(book);
-      }
+    recommendedBooks.forEach(book => {
+      const genre = book.categories?.[0] || "Sin género";
+      if (!groupedByGenre[genre]) groupedByGenre[genre] = [];
+      groupedByGenre[genre].push(book);
     });
 
     content = (
@@ -177,17 +138,11 @@ const Recommendations: React.FC = () => {
         {Object.entries(groupedByGenre).map(([genre, books]) => (
           <div key={genre}>
             <IonItem color="light">
-              <IonLabel>
-                <strong>{genre}</strong>
-              </IonLabel>
+              <IonLabel><strong>{genre}</strong></IonLabel>
             </IonItem>
-            {books.map((book) => (
+            {books.map(book => (
               <IonItem key={book.id}>
-                {book.cover && (
-                  <IonThumbnail slot="start">
-                    <img src={book.cover} alt={book.title} />
-                  </IonThumbnail>
-                )}
+                {book.cover && <IonThumbnail slot="start"><img src={book.cover} alt={book.title} /></IonThumbnail>}
                 <IonLabel>
                   <h2>{book.title}</h2>
                   <p>{book.author.join(", ")}</p>
@@ -200,8 +155,8 @@ const Recommendations: React.FC = () => {
     );
   } else if (filterType === "author") {
     const groupedByAuthor: Record<string, Book[]> = {};
-    recommendedBooks.forEach((book) => {
-      const author = book.author[0] || "Desconocido";
+    recommendedBooks.forEach(book => {
+      const author = book.author?.[0] || "Desconocido";
       if (!groupedByAuthor[author]) groupedByAuthor[author] = [];
       groupedByAuthor[author].push(book);
     });
@@ -211,17 +166,11 @@ const Recommendations: React.FC = () => {
         {Object.entries(groupedByAuthor).map(([author, books]) => (
           <div key={author}>
             <IonItem color="light">
-              <IonLabel>
-                <strong>{author}</strong>
-              </IonLabel>
+              <IonLabel><strong>{author}</strong></IonLabel>
             </IonItem>
-            {books.map((book) => (
+            {books.map(book => (
               <IonItem key={book.id}>
-                {book.cover && (
-                  <IonThumbnail slot="start">
-                    <img src={book.cover} alt={book.title} />
-                  </IonThumbnail>
-                )}
+                {book.cover && <IonThumbnail slot="start"><img src={book.cover} alt={book.title} /></IonThumbnail>}
                 <IonLabel>
                   <h2>{book.title}</h2>
                   <p>{book.categories?.join(", ") || "Sin género"}</p>
@@ -241,13 +190,9 @@ const Recommendations: React.FC = () => {
 
     content = (
       <IonList>
-        {sortedBooks.map((book) => (
+        {sortedBooks.map(book => (
           <IonItem key={book.id}>
-            {book.cover && (
-              <IonThumbnail slot="start">
-                <img src={book.cover} alt={book.title} />
-              </IonThumbnail>
-            )}
+            {book.cover && <IonThumbnail slot="start"><img src={book.cover} alt={book.title} /></IonThumbnail>}
             <IonLabel>
               <h2>{book.title}</h2>
               <p>{book.publishedDate || "Sin fecha"}</p>
@@ -267,53 +212,23 @@ const Recommendations: React.FC = () => {
       </IonHeader>
       <IonContent>
         {loading ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              marginTop: "2rem",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "2rem" }}>
             <IonSpinner name="crescent" />
           </div>
         ) : recommendedBooks.length === 0 ? (
-          <p style={{ textAlign: "center", marginTop: "2rem" }}>
-            No se encontraron recomendaciones.
-          </p>
+          <p style={{ textAlign: "center", marginTop: "2rem" }}>No se encontraron recomendaciones.</p>
         ) : (
           <>
-            {/* 🔹 Selector de filtro */}
-            <IonSegment
-              value={filterType}
-              onIonChange={(e) =>
-                setFilterType(e.detail.value as "genre" | "author" | "date")
-              }
-            >
-              <IonSegmentButton value="genre">
-                <IonLabel>Género</IonLabel>
-              </IonSegmentButton>
-              <IonSegmentButton value="author">
-                <IonLabel>Autor</IonLabel>
-              </IonSegmentButton>
-              <IonSegmentButton value="date">
-                <IonLabel>Fecha</IonLabel>
-              </IonSegmentButton>
+            <IonSegment value={filterType} onIonChange={e => setFilterType(e.detail.value as any)}>
+              <IonSegmentButton value="genre"><IonLabel>Género</IonLabel></IonSegmentButton>
+              <IonSegmentButton value="author"><IonLabel>Autor</IonLabel></IonSegmentButton>
+              <IonSegmentButton value="date"><IonLabel>Fecha</IonLabel></IonSegmentButton>
             </IonSegment>
 
-            {/* 🔹 Botón de orden asc/desc solo si está en fecha */}
             {filterType === "date" && (
-              <IonSegment
-                value={sortOrder}
-                onIonChange={(e) =>
-                  setSortOrder(e.detail.value as "asc" | "desc")
-                }
-              >
-                <IonSegmentButton value="asc">
-                  <IonLabel>Ascendente</IonLabel>
-                </IonSegmentButton>
-                <IonSegmentButton value="desc">
-                  <IonLabel>Descendente</IonLabel>
-                </IonSegmentButton>
+              <IonSegment value={sortOrder} onIonChange={e => setSortOrder(e.detail.value as any)}>
+                <IonSegmentButton value="asc"><IonLabel>Ascendente</IonLabel></IonSegmentButton>
+                <IonSegmentButton value="desc"><IonLabel>Descendente</IonLabel></IonSegmentButton>
               </IonSegment>
             )}
 

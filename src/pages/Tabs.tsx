@@ -14,7 +14,7 @@ import Favorites from "./Favorites";
 import Recommendations from "./Recommendations";
 
 interface TabsProps {
-  userId: string;
+  userId?: string;
 }
 
 const Tabs: React.FC<TabsProps> = ({ userId }) => {

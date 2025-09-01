@@ -14,8 +14,10 @@ import {
 } from "@ionic/react";
 import { FavoritesContext } from "../context/FavoriteContext";
 import { useHistory } from "react-router-dom";
-
-const Favorites: React.FC = () => {
+interface FavoritesProps {
+  userId?: string;
+}
+const Favorites: React.FC<FavoritesProps> = ({ userId }) => {
   const { favorites, removeFavorite } = useContext(FavoritesContext);
   const history = useHistory();
 

@@ -18,8 +18,10 @@ import { searchBooks } from "../service/booksApi";
 import { addFavorite } from "../service/firestore";
 import { Book } from "../types/book";
 import { FavoritesContext } from "../context/FavoriteContext";
-
-const Home: React.FC = () => {
+interface HomeProps {
+  userId?: string; // ? significa que es opcional
+}
+const Home: React.FC<HomeProps> = ({ userId }) => {
   const [query, setQuery] = useState("");
   const [books, setBooks] = useState<Book[]>([]);
   const [message, setMessage] = useState(""); // mensaje de éxito
